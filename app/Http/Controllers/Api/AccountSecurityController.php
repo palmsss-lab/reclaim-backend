@@ -57,7 +57,7 @@ class AccountSecurityController extends Controller
             $user->notify(new SetReclaimPassword($proof));
         });
 
-        return response()->json(['message' => 'A single-use password setup link was sent to your verified email.']);
+        return response()->json(['email_status' => 'accepted', 'message' => 'Your password setup email was accepted for sending. Check your inbox and spam folder. The link expires in 15 minutes.'])->header('Cache-Control', 'private, no-store');
     }
 
     public function setPassword(SetupPasswordRequest $request, BrowserSession $sessions)

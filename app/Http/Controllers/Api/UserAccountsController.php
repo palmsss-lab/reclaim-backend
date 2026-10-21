@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Accounts\BrowserSession;
 use App\Actions\Accounts\RecoverPassword;
+use App\Exceptions\MailDeliveryFailed;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterUserRequest;
 use App\Http\Requests\Auth\ResetUserPasswordRequest;
@@ -44,12 +45,21 @@ class UserAccountsController extends Controller
             }
             throw ValidationException::withMessages(['email' => 'The email has already been taken.']);
         }
-        $user->sendEmailVerificationNotification();
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (MailDeliveryFailed) {
+            return response()->json([
+                'code' => 'account_created_email_failed', 'account_created' => true,
+                'verification_email' => ['status' => 'failed'], 'message' => MailDeliveryFailed::MESSAGE,
+            ], 503)->header('Cache-Control', 'private, no-store');
+        }
 
         return response()->json(['data' => [
             'id' => (int) $user->id, 'email' => $user->email,
             'full_name' => $user->name, 'email_verified' => false,
-        ], 'message' => 'Registration complete. Check your email to verify the address before using user features.'], 201);
+        ], 'verification_email' => ['status' => 'accepted'],
+            'message' => 'Account created. The verification email was accepted for sending. Check your inbox and spam folder. If it does not arrive, sign in to request a new verification email.',
+        ], 201)->header('Cache-Control', 'private, no-store');
     }
 
     public function forgotPassword(Request $request, RecoverPassword $recovery): JsonResponse
@@ -103,7 +113,7 @@ class UserAccountsController extends Controller
             $user->sendEmailVerificationNotification();
         }
 
-        return response()->json(['message' => 'If verification is required, a new email has been sent.']);
+        return response()->json(['message' => 'If verification is required, the email request was accepted for sending. Check your inbox and spam folder. Delivery may take a few minutes.'])->header('Cache-Control', 'private, no-store');
     }
 
     public function profile(Request $request): JsonResponse

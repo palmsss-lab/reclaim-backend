@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Middleware\NoStorePrivateApiResponses;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Http\Middleware\NoStorePrivateApiResponses;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -16,9 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+        $middleware->trustProxies(headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->respond(function ($response, \Throwable $error, Request $request) {
+        $exceptions->respond(function ($response, Throwable $error, Request $request) {
             if (in_array(NoStorePrivateApiResponses::class, $request->route()?->gatherMiddleware() ?? [], true)) {
                 $response->headers->set('Cache-Control', 'private, no-store');
             }

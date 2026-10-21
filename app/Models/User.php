@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Mail\AccountEmail;
 use App\Notifications\ResetUserPassword;
 use App\Notifications\VerifyUserEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -29,6 +30,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function sendEmailVerificationNotification(): void
     {
+        AccountEmail::prepare();
         $url = URL::temporarySignedRoute(
             'user.email.verify', now()->addMinutes(60),
             ['id' => $this->getKey(), 'hash' => sha1($this->getEmailForVerification())]

@@ -36,8 +36,8 @@ class BrevoTransport extends AbstractTransport
                     'sender' => ['email' => $sender->getAddress(), 'name' => $sender->getName()],
                     'to' => array_map(fn ($address) => ['email' => $address->getAddress()], $message->getEnvelope()->getRecipients()),
                     'subject' => $email->getSubject(),
-                    'htmlContent' => $email->getHtmlBody(),
-                    'textContent' => $email->getTextBody(),
+                    ...($email->getHtmlBody() !== null ? ['htmlContent' => $email->getHtmlBody()] : []),
+                    ...($email->getTextBody() !== null ? ['textContent' => $email->getTextBody()] : []),
                 ]);
             $messageId = $response->json('messageId');
             if ($response->status() !== 201 || ! is_string($messageId) || trim($messageId) === '') {
