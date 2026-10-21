@@ -7,6 +7,9 @@ RUN apt-get update \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
+RUN (getent group 1000 >/dev/null || groupadd --gid 1000 render-secrets) \
+    && usermod --append --groups "$(getent group 1000 | cut -d: -f1)" www-data
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html

@@ -22,3 +22,4 @@ tests
 *.bak
 auth.json
 storage/*.key
+ca.pem
