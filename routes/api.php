@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AccountSecurityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoriesController;
 use App\Http\Controllers\Api\ClaimsController;
+use App\Http\Controllers\Api\ClaimProofImagesController;
 use App\Http\Controllers\Api\FinderReportsController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\ImagesController;
@@ -82,6 +83,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
         Route::get('/reports/storage-occupancy', [ReportsController::class, 'storageOccupancy']);
         Route::get('/reports/monthly-intake', [ReportsController::class, 'monthlyIntake']);
         Route::get('/items/{item}/claims', [ClaimsController::class, 'index'])->whereNumber('item');
+        Route::get('/items/{item}/claims/{claimant}/proof-image', [ClaimProofImagesController::class, 'staff'])->whereNumber(['item', 'claimant'])->middleware(['can:manageClaims,App\\Models\\FoundItem', 'throttle:60,1']);
         Route::post('/items/{item}/claims', [ClaimsController::class, 'store'])->whereNumber('item');
         Route::post('/items/{item}/claims/{claimant}/reject', [ClaimsController::class, 'reject'])->whereNumber(['item', 'claimant']);
         Route::post('/items/{item}/claims/{claimant}/return', [ClaimsController::class, 'returnItem'])->whereNumber(['item', 'claimant']);
@@ -119,6 +121,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
         Route::get('/claims', [UserClaimsController::class, 'index']);
         Route::post('/items/{item}/claims', [UserClaimsController::class, 'store'])->whereNumber('item')->middleware('throttle:10,1');
         Route::get('/claims/{item}', [UserClaimsController::class, 'show'])->whereNumber('item');
+        Route::get('/claims/{item}/proof-image', [ClaimProofImagesController::class, 'owner'])->whereNumber('item')->middleware('throttle:60,1');
     });
 });
 

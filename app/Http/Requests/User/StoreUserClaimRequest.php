@@ -15,6 +15,7 @@ class StoreUserClaimRequest extends FormRequest
     {
         return [
             'evidence_text' => ['required', 'string', 'max:16000', 'not_regex:/^\s*$/'],
+            'image' => ['nullable', 'file', 'max:5120'],
             'claimant_id' => ['prohibited'], 'person_id' => ['prohibited'], 'outcome' => ['prohibited'],
             'submitted_at' => ['prohibited'], 'reviewed_by' => ['prohibited'], 'reviewed_at' => ['prohibited'],
         ];

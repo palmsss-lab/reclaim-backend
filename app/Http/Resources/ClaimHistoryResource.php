@@ -9,6 +9,7 @@ class ClaimHistoryResource extends ClaimResource
     public function toArray(Request $request): array
     {
         return array_merge(parent::toArray($request), [
+            'has_proof_image' => (bool) $this->has_proof_image,
             'claimant' => [
                 'person_id' => (int) $this->claimant_id,
                 'full_name' => $this->claimant_name,

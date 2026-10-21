@@ -51,6 +51,7 @@ class ClaimsController extends Controller
                 'claim.*', 'claimant.full_name as claimant_name',
                 'claimant.contact_details as claimant_contact', 'reviewer.full_name as reviewer_name',
             ])
+            ->selectRaw('EXISTS(SELECT 1 FROM claim_proof_image AS proof WHERE proof.item_id = claim.item_id AND proof.claimant_id = claim.claimant_id) AS has_proof_image')
             ->where('claim.item_id', $item)
             ->when(isset($filters['outcome']), fn ($query) => $query->where('claim.outcome', $filters['outcome']))
             ->orderByDesc('claim.submitted_at')

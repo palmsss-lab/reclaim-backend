@@ -25,7 +25,8 @@ class ReclaimReports
                 'reviewer.full_name as reviewer_name', 'item.item_description',
                 'item.category_id as item_category_id', 'category.category_name as item_category_name',
                 'item.received_at as item_received_at',
-            ]);
+            ])
+            ->selectRaw('EXISTS(SELECT 1 FROM claim_proof_image AS proof WHERE proof.item_id = claim.item_id AND proof.claimant_id = claim.claimant_id) AS has_proof_image');
 
         $this->applyReceivedDateRange($query, $filters, 'item.received_at');
 
