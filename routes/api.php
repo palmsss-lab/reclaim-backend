@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\UserClaimsController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureUserAccount;
 use App\Http\Middleware\EnsureVerifiedUserEmail;
+use App\Http\Middleware\NoStorePrivateApiResponses;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -31,14 +32,14 @@ Route::post('/auth/google/exchange', [GoogleAuthController::class, 'exchange'])-
 
 Route::post('/auth/register', [UserAccountsController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/auth/login', [AuthController::class, 'store'])->middleware('throttle:10,1');
-Route::post('/auth/password/forgot', [UserAccountsController::class, 'forgotPassword'])->middleware('throttle:5,1');
-Route::post('/auth/password/verify-code', [UserAccountsController::class, 'verifyResetCode'])->middleware('throttle:5,1');
-Route::post('/auth/password/reset', [UserAccountsController::class, 'resetPassword'])->middleware('throttle:5,1');
+Route::post('/auth/password/forgot', [UserAccountsController::class, 'forgotPassword'])->middleware('throttle:5,1,password-recovery:');
+Route::post('/auth/password/verify-code', [UserAccountsController::class, 'verifyResetCode'])->middleware('throttle:5,1,password-recovery:');
+Route::post('/auth/password/reset', [UserAccountsController::class, 'resetPassword'])->middleware('throttle:5,1,password-recovery:');
 Route::get('/auth/email/verify/{id}/{hash}', [UserAccountsController::class, 'verifyEmail'])
     ->middleware(['signed', 'throttle:10,1'])->name('user.email.verify');
 
-Route::get('/public/items', [PublicItemsController::class, 'index'])->middleware('throttle:60,1');
-Route::get('/public/items/{item}', [PublicItemsController::class, 'show'])->whereNumber('item')->middleware('throttle:60,1');
+Route::get('/public/items', [PublicItemsController::class, 'index'])->middleware('throttle:60,1,public-browse:');
+Route::get('/public/items/{item}', [PublicItemsController::class, 'show'])->whereNumber('item')->middleware('throttle:60,1,public-browse:');
 
 Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSession::class])->group(function (): void {
     Route::post('/auth/logout', [AuthController::class, 'destroy']);
@@ -50,8 +51,8 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
     Route::post('/me/password/setup-email', [AccountSecurityController::class, 'sendSetup'])->middleware('throttle:password-setup-email');
     Route::post('/me/password/setup', [AccountSecurityController::class, 'setPassword'])->middleware('throttle:password-setup');
     Route::post('/auth/password', [AccountsController::class, 'changePassword'])->middleware('throttle:5,1');
-    Route::get('/me/profile', [UserAccountsController::class, 'profile'])->middleware(EnsureUserAccount::class);
-    Route::match(['put', 'patch'], '/me/profile', [UserAccountsController::class, 'updateProfile'])->middleware(EnsureUserAccount::class);
+    Route::get('/me/profile', [UserAccountsController::class, 'profile'])->middleware([EnsureUserAccount::class, NoStorePrivateApiResponses::class]);
+    Route::match(['put', 'patch'], '/me/profile', [UserAccountsController::class, 'updateProfile'])->middleware([EnsureUserAccount::class, NoStorePrivateApiResponses::class]);
 
     Route::middleware('can:manageAccounts,App\\Models\\User')->group(function (): void {
         Route::get('/accounts', [AccountsController::class, 'index']);
@@ -77,7 +78,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
         Route::match(['put', 'patch'], '/storage-locations/{location}', [StorageLocationsController::class, 'update'])->whereNumber('location');
     });
 
-    Route::middleware('can:manageItems,App\\Models\\FoundItem')->group(function (): void {
+    Route::middleware([NoStorePrivateApiResponses::class, 'can:manageItems,App\\Models\\FoundItem'])->group(function (): void {
         Route::get('/reports/pending-claims', [ReportsController::class, 'pendingClaims']);
         Route::get('/reports/return-rates', [ReportsController::class, 'returnRates']);
         Route::get('/reports/storage-occupancy', [ReportsController::class, 'storageOccupancy']);
@@ -107,7 +108,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
         Route::post('/auth/email/verification-notification', [UserAccountsController::class, 'resendVerification'])->middleware('throttle:3,1');
     });
 
-    Route::middleware([EnsureUserAccount::class, EnsureVerifiedUserEmail::class])->prefix('my')->group(function (): void {
+    Route::middleware([EnsureUserAccount::class, EnsureVerifiedUserEmail::class, NoStorePrivateApiResponses::class])->prefix('my')->group(function (): void {
         Route::get('/finder-reports', [FinderReportsController::class, 'index']);
         Route::post('/finder-reports', [FinderReportsController::class, 'store'])->middleware('throttle:10,1');
         Route::get('/finder-reports/{report}', [FinderReportsController::class, 'show'])->whereNumber('report');
@@ -129,8 +130,8 @@ Route::get('/public/categories', function (Request $request) {
     $data = $request->validate(['per_page' => ['sometimes', 'integer', 'between:1,100'], 'page' => ['sometimes', 'integer', 'min:1']]);
 
     return response()->json(DB::table('category')->select(['category_id', 'category_name'])->orderBy('category_name')->orderBy('category_id')->paginate($data['per_page'] ?? 100));
-})->middleware('throttle:60,1');
-Route::get('/public/items/{item}/images/{image}', [ImagesController::class, 'publicContent'])->whereNumber(['item', 'image'])->middleware('throttle:120,1');
+})->middleware('throttle:60,1,public-browse:');
+Route::get('/public/items/{item}/images/{image}', [ImagesController::class, 'publicContent'])->whereNumber(['item', 'image'])->middleware('throttle:120,1,public-image:');
 
 $images = static function (string $prefix, string $scope, string $audience, bool $write): void {
     $route = static fn ($r) => $r->defaults('scope', $scope)->defaults('audience', $audience)->whereNumber(['parent', 'image']);

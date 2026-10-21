@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Middleware\NoStorePrivateApiResponses;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -17,6 +18,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        $exceptions->respond(function ($response, \Throwable $error, Request $request) {
+            if (in_array(NoStorePrivateApiResponses::class, $request->route()?->gatherMiddleware() ?? [], true)) {
+                $response->headers->set('Cache-Control', 'private, no-store');
+            }
+
+            return $response;
+        });
         $exceptions->render(function (HttpExceptionInterface $error, Request $request) {
             if ($request->routeIs('user.email.verify') && $request->prefers(['application/json', 'text/html']) === 'text/html'
                 && in_array($error->getStatusCode(), [403, 404], true)) {
