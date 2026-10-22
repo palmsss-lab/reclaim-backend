@@ -2,16 +2,14 @@
 
 namespace App\Models;
 
-use App\Mail\AccountEmail;
+use App\Actions\Accounts\VerifyAccountEmail;
 use App\Notifications\ResetUserPassword;
-use App\Notifications\VerifyUserEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements MustVerifyEmail
@@ -30,13 +28,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function sendEmailVerificationNotification(): void
     {
-        AccountEmail::prepare();
-        $url = URL::temporarySignedRoute(
-            'user.email.verify', now()->addMinutes(60),
-            ['id' => $this->getKey(), 'hash' => sha1($this->getEmailForVerification())]
-        );
-
-        $this->notify(new VerifyUserEmail($url));
+        app(VerifyAccountEmail::class)->send($this);
     }
 
     public function sendPasswordResetNotification($token): void

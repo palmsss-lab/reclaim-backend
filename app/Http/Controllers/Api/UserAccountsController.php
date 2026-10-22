@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Accounts\BrowserSession;
 use App\Actions\Accounts\RecoverPassword;
+use App\Actions\Accounts\VerifyAccountEmail;
 use App\Exceptions\MailDeliveryFailed;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterUserRequest;
 use App\Http\Requests\Auth\ResetUserPasswordRequest;
 use App\Http\Requests\Auth\UpdateUserProfileRequest;
+use App\Http\Requests\Auth\VerifyEmailCodeRequest;
 use App\Http\Requests\Auth\VerifyPasswordResetCodeRequest;
 use App\Models\Person;
 use App\Models\User;
@@ -106,6 +108,14 @@ class UserAccountsController extends Controller
         return response()->json(['message' => 'Email verified. You can now sign in to Reclaim.']);
     }
 
+    public function verifyEmailCode(VerifyEmailCodeRequest $request, VerifyAccountEmail $verification): JsonResponse
+    {
+        $verification->verify($request->user(), $request->validated('code'));
+
+        return response()->json(['data' => ['email_verified' => true], 'message' => 'Email verified. You can now use Reclaim reports and claims.'])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function resendVerification(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -113,7 +123,7 @@ class UserAccountsController extends Controller
             $user->sendEmailVerificationNotification();
         }
 
-        return response()->json(['message' => 'If verification is required, the email request was accepted for sending. Check your inbox and spam folder. Delivery may take a few minutes.'])->header('Cache-Control', 'private, no-store');
+        return response()->json(['message' => 'If verification is required, your code email was accepted for sending. Check your inbox and spam folder. Codes expire after 10 minutes.'])->header('Cache-Control', 'private, no-store');
     }
 
     public function profile(Request $request): JsonResponse
@@ -153,7 +163,7 @@ class UserAccountsController extends Controller
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages(['email' => 'The email has already been taken.']);
         }
-        if ($user->email_verified_at === null) {
+        if ($user->wasChanged('email')) {
             $user->sendEmailVerificationNotification();
         }
         $request->setUserResolver(fn () => $user);

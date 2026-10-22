@@ -4,8 +4,8 @@ use App\Http\Controllers\Api\AccountsController;
 use App\Http\Controllers\Api\AccountSecurityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoriesController;
-use App\Http\Controllers\Api\ClaimsController;
 use App\Http\Controllers\Api\ClaimProofImagesController;
+use App\Http\Controllers\Api\ClaimsController;
 use App\Http\Controllers\Api\FinderReportsController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\ImagesController;
@@ -105,7 +105,8 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
     });
 
     Route::middleware(EnsureUserAccount::class)->group(function (): void {
-        Route::post('/auth/email/verification-notification', [UserAccountsController::class, 'resendVerification'])->middleware('throttle:3,1');
+        Route::post('/auth/email/verification-notification', [UserAccountsController::class, 'resendVerification'])->middleware([NoStorePrivateApiResponses::class, 'throttle:3,1,email-verification-send:']);
+        Route::post('/auth/email/verify-code', [UserAccountsController::class, 'verifyEmailCode'])->middleware([NoStorePrivateApiResponses::class, 'throttle:10,1,email-verification-check:']);
     });
 
     Route::middleware([EnsureUserAccount::class, EnsureVerifiedUserEmail::class, NoStorePrivateApiResponses::class])->prefix('my')->group(function (): void {
