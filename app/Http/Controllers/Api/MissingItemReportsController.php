@@ -8,6 +8,7 @@ use App\Http\Requests\User\MyMissingReportIndexRequest;
 use App\Http\Requests\User\MyReportIndexRequest;
 use App\Http\Requests\User\ReviewMissingReportRequest;
 use App\Http\Requests\User\StaffReportIndexRequest;
+use App\Services\InAppNotifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,6 +109,7 @@ class MissingItemReportsController extends Controller
                 'reviewed_at' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d H:i:s.u'),
                 'updated_at' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d H:i:s.u'),
             ]);
+            app(InAppNotifications::class)->missingReviewed($report, (int) $r->user_id);
         });
         return response()->json(['data' => $this->staffQuery()->where('r.report_id', $report)->first()]);
     }

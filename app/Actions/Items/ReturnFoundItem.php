@@ -3,6 +3,7 @@
 namespace App\Actions\Items;
 
 use App\Models\FoundItem;
+use App\Services\InAppNotifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -59,6 +60,8 @@ class ReturnFoundItem
                 'reviewed_by' => $staffId,
                 'reviewed_at' => $time->format('Y-m-d H:i:s.u'),
             ];
+            $outcomes = DB::table('claim')->where('item_id', $itemId)->where('outcome', 'PENDING')
+                ->lockForUpdate()->pluck('claimant_id')->mapWithKeys(fn ($personId) => [(int) $personId => (int) $personId === $claimantId ? 'RETURNED' : 'REJECTED'])->all();
             $updated = (clone $claims)->where('outcome', 'PENDING')
                 ->update(array_merge($reviewFields, ['outcome' => 'RETURNED']));
             if ($updated !== 1) {
@@ -82,6 +85,7 @@ class ReturnFoundItem
                 throw new ConflictHttpException('The current storage assignment changed during return.');
             }
 
+            app(InAppNotifications::class)->claimsReviewed($itemId, $outcomes);
             return $claims->first();
         });
     }

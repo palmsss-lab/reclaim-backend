@@ -10,6 +10,7 @@ use App\Http\Requests\User\ReceiveFinderReportRequest;
 use App\Http\Requests\User\StaffReportIndexRequest;
 use App\Models\Person;
 use App\Models\User;
+use App\Services\InAppNotifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,6 +98,7 @@ class FinderReportsController extends Controller
                 'status' => 'RECEIVED', 'reviewed_by' => $request->user()->staff_id,
                 'reviewed_at' => $now, 'received_item_id' => $item->item_id, 'updated_at' => $now,
             ]);
+            app(InAppNotifications::class)->finderChanged($report, (int) $r->user_id, 'RECEIVED');
             return $item;
         });
         return response()->json(['data' => ['report_id' => $report, 'status' => 'RECEIVED', 'item_id' => (int) $item->item_id]], 201);
@@ -110,6 +112,7 @@ class FinderReportsController extends Controller
             if ($r->status !== 'PENDING') throw new ConflictHttpException('Only pending finder reports can be closed.');
             $now = CarbonImmutable::now(config('app.timezone'))->format('Y-m-d H:i:s.u');
             DB::table('finder_report')->where('report_id', $report)->update(['status' => 'CLOSED', 'reviewed_by' => $request->user()->staff_id, 'reviewed_at' => $now, 'updated_at' => $now]);
+            app(InAppNotifications::class)->finderChanged($report, (int) $r->user_id, 'CLOSED');
         });
         return response()->json(['data' => $this->staffQuery()->where('r.report_id', $report)->first()]);
     }

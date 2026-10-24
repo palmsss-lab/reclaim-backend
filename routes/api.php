@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\ImagesController;
 use App\Http\Controllers\Api\ItemsController;
 use App\Http\Controllers\Api\MissingItemReportsController;
+use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\PeopleController;
 use App\Http\Controllers\Api\PublicItemsController;
 use App\Http\Controllers\Api\ReportsController;
@@ -102,11 +103,19 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
         Route::get('/staff/missing-reports', [MissingItemReportsController::class, 'staffIndex']);
         Route::get('/staff/missing-reports/{report}', [MissingItemReportsController::class, 'staffShow'])->whereNumber('report');
         Route::post('/staff/missing-reports/{report}/review', [MissingItemReportsController::class, 'review'])->whereNumber('report');
+        Route::post('/staff/missing-reports/{report}/possible-matches', [NotificationsController::class, 'possibleMatch'])->whereNumber('report')->middleware('throttle:10,1');
     });
 
     Route::middleware(EnsureUserAccount::class)->group(function (): void {
         Route::post('/auth/email/verification-notification', [UserAccountsController::class, 'resendVerification'])->middleware([NoStorePrivateApiResponses::class, 'throttle:3,1,email-verification-send:']);
         Route::post('/auth/email/verify-code', [UserAccountsController::class, 'verifyEmailCode'])->middleware([NoStorePrivateApiResponses::class, 'throttle:10,1,email-verification-check:']);
+    });
+
+    Route::middleware([EnsureUserAccount::class, NoStorePrivateApiResponses::class])->prefix('my/notifications')->group(function (): void {
+        Route::get('/', [NotificationsController::class, 'index']);
+        Route::get('/unread-count', [NotificationsController::class, 'unreadCount']);
+        Route::patch('/read-all', [NotificationsController::class, 'readAll']);
+        Route::patch('/{notification}/read', [NotificationsController::class, 'read'])->whereNumber('notification');
     });
 
     Route::middleware([EnsureUserAccount::class, EnsureVerifiedUserEmail::class, NoStorePrivateApiResponses::class])->prefix('my')->group(function (): void {

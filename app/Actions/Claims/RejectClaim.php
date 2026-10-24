@@ -3,6 +3,7 @@
 namespace App\Actions\Claims;
 
 use App\Models\FoundItem;
+use App\Services\InAppNotifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -45,6 +46,7 @@ class RejectClaim
                 throw new ConflictHttpException('The claim changed during review.');
             }
 
+            app(InAppNotifications::class)->claimsReviewed($itemId, [$claimantId => 'REJECTED']);
             return $claims->first();
         });
     }
