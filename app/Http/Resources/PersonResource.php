@@ -13,6 +13,7 @@ class PersonResource extends JsonResource
             'person_id' => (int) $this->person_id,
             'full_name' => $this->full_name,
             'contact_details' => $this->contact_details,
+            'is_account_holder' => (bool) $this->account_exists,
         ];
     }
 }

@@ -17,6 +17,7 @@ class PeopleController extends Controller
     {
         $pattern = $request->searchPattern();
         $records = Person::query()
+            ->withExists('account')
             ->when($pattern !== null, function (Builder $query) use ($pattern): void {
                 $query->where(function (Builder $query) use ($pattern): void {
                     $query->whereRaw("full_name LIKE ? ESCAPE '!'", [$pattern])
@@ -33,14 +34,14 @@ class PeopleController extends Controller
 
     public function show(PersonRequest $request, Person $person): JsonResponse
     {
-        return (new PersonResource($person))->response();
+        return (new PersonResource($person->loadExists('account')))->response();
     }
 
     public function store(PersonRequest $request, SaveReferenceData $save): JsonResponse
     {
         $record = $save->execute(new Person, $request->safe()->only(['full_name', 'contact_details']));
 
-        return (new PersonResource($record))->response()->setStatusCode(201);
+        return (new PersonResource($record->loadExists('account')))->response()->setStatusCode(201);
     }
 
     public function update(PersonRequest $request, Person $person, SaveReferenceData $save): JsonResponse
@@ -51,6 +52,6 @@ class PeopleController extends Controller
             'Account profile details can only be updated by the account holder.');
         $record = $save->execute($person, $request->safe()->only(['full_name', 'contact_details']));
 
-        return (new PersonResource($record))->response();
+        return (new PersonResource($record->loadExists('account')))->response();
     }
 }

@@ -61,7 +61,8 @@ class ReferenceDataTest extends TestCase
         $response = $this->postJson('/api/'.$endpoint, $data)->assertCreated();
         $id = $response->json('data.'.$key);
         $this->assertIsInt($id);
-        $response->assertJsonCount(count($data) + 1, 'data');
+        $response->assertJsonCount(count($data) + ($endpoint === 'people' ? 2 : 1), 'data');
+        if ($endpoint === 'people') $response->assertJsonPath('data.is_account_holder', false);
         foreach ($data as $field => $value) {
             $response->assertJsonPath('data.'.$field, $value);
         }

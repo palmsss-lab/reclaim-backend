@@ -13,6 +13,7 @@ use App\Http\Requests\Claims\StoreClaimRequest;
 use App\Http\Resources\ClaimHistoryResource;
 use App\Http\Resources\ClaimResource;
 use App\Models\FoundItem;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,8 @@ class ClaimsController extends Controller
 {
     public function store(StoreClaimRequest $request, int $item, SubmitClaim $submit): JsonResponse
     {
+        abort_if(User::query()->where('person_id', $request->validated('claimant_id'))->exists(), 403,
+            'Account holders must submit their own claims.');
         $claim = $submit->execute($item, $request->validated());
 
         return (new ClaimResource($claim))->response()->setStatusCode(201);
