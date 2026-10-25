@@ -132,6 +132,9 @@ class FinderReportsController extends Controller
             ->join('person as p', 'p.person_id', '=', 'u.person_id')
             ->leftJoin('category as c', 'c.category_id', '=', 'r.category_id')
             ->leftJoin('staff as reviewer', 'reviewer.staff_id', '=', 'r.reviewed_by')
-            ->select(['r.report_id', 'r.item_description', 'r.found_place', 'r.found_at', 'r.submitted_at', 'r.status', 'r.reviewed_at', 'r.received_item_id', 'r.category_id', 'c.category_name', 'r.created_at', 'p.full_name as reporter_name', 'p.contact_details as reporter_contact', 'u.email as reporter_email', 'reviewer.full_name as reviewer_name']);
+            ->select(['r.report_id', 'r.item_description', 'r.found_place', 'r.found_at', 'r.submitted_at', 'r.status', 'r.reviewed_at', 'r.received_item_id', 'r.category_id', 'c.category_name', 'r.created_at', 'p.full_name as reporter_name', 'p.contact_details as reporter_contact', 'u.email as reporter_email', 'reviewer.full_name as reviewer_name'])
+            ->selectSub(DB::table('in_app_notification as n')->selectRaw('MAX(n.created_at)')
+                ->whereColumn('n.user_id', 'r.user_id')->whereColumn('n.target_id', 'r.report_id')
+                ->where('n.target_type', 'finder_report')->where('n.kind', 'finder_handover_requested'), 'last_handover_reminder_at');
     }
 }

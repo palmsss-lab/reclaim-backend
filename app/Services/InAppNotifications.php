@@ -10,6 +10,34 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class InAppNotifications
 {
+    public function requestHandover(int $reportId, string $requestId): array
+    {
+        return DB::transaction(function () use ($reportId, $requestId): array {
+            $report = DB::table('finder_report')->where('report_id', $reportId)->lockForUpdate()->first();
+            abort_unless($report, 404);
+            if ($report->status !== 'PENDING' || $report->received_item_id !== null) {
+                throw new ConflictHttpException('This finder report is no longer pending handover.');
+            }
+            $key = "finder:$reportId:handover_requested:".strtolower($requestId);
+            $notifications = DB::table('in_app_notification')->where('user_id', $report->user_id);
+            $existing = (clone $notifications)->where('event_key', $key)->lockForUpdate()->first();
+            $latest = (clone $notifications)->where('kind', 'finder_handover_requested')
+                ->where('target_type', 'finder_report')->where('target_id', $reportId)
+                ->orderByDesc('created_at')->orderByDesc('notification_id')->lockForUpdate()->first();
+            $now = CarbonImmutable::now(config('app.timezone'));
+            if (! $existing && $latest && $now->lessThan(CarbonImmutable::parse($latest->created_at, config('app.timezone'))->addHour())) {
+                throw new ConflictHttpException('A handover reminder was already sent within the last hour.');
+            }
+            if (! $existing) {
+                $this->record((int) $report->user_id, $key, 'finder_handover_requested', 'finder_report', $reportId,
+                    'Staff have not received the item from your found-item report yet. Please bring it to the office for physical handover. Contact the office to arrange handover.');
+            }
+            $sent = $existing ? CarbonImmutable::parse($existing->created_at, config('app.timezone')) : $now;
+            $last = $existing && $latest ? CarbonImmutable::parse($latest->created_at, config('app.timezone')) : $sent;
+            return ['sent_at' => $sent->toIso8601String(), 'next_reminder_at' => $last->addHour()->toIso8601String(), 'deduplicated' => $existing !== null];
+        });
+    }
+
     public function possibleMatch(int $reportId, int $itemId): void
     {
         DB::transaction(function () use ($reportId, $itemId): void {

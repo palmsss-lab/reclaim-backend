@@ -2,6 +2,8 @@
 
 ## Private in-app notifications (2026-10-24)
 
+Finder handover reminders reuse this extension with no new migration or domain-table change. Kind `finder_handover_requested`, target `finder_report`, and event key `finder:{report}:handover_requested:{request_uuid}` fit the existing columns and unique `(user_id,event_key)` constraint. A locked finder-report transaction serializes sends, preserves retry/read state, and allows a new intentional reminder only after one hour. `last_handover_reminder_at` in staff responses is derived from notification history. See `NOTIFICATIONS_API.md` for the request and retry contract.
+
 Additive migration `2026_10_24_000001_create_in_app_notifications.php` creates `in_app_notification` **outside the original seven domain tables**. No domain columns, keys, checks, history or foreign keys are changed.
 
 The table contains an auto-increment unsigned BIGINT `notification_id`, account FK `user_id`, server-only event key, fixed kind/message, own-record target type/ID, optional public possible-item reference, nullable `read_at`, and `created_at` (both DATETIME(6), Philippine local time). Targets are historical application references, not polymorphic domain foreign keys. Responses explicitly select safe fields and recheck public visibility before exposing a possible-item reference.

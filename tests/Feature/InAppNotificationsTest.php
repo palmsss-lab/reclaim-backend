@@ -64,6 +64,94 @@ class InAppNotificationsTest extends TestCase
     private function sendMatch(): void { $this->postJson($this->matchUrl(), ['item_id' => $this->item])->assertOk(); }
     private function own(): void { Sanctum::actingAs($this->owner, ['user']); }
 
+    private function reminderUrl(): string { return '/api/staff/finder-reports/'.$this->finder.'/request-handover'; }
+    private function reminderBody(string $suffix = '1'): array { return ['request_id' => '00000000-0000-4000-8000-'.str_pad($suffix, 12, '0', STR_PAD_LEFT)]; }
+
+    public function test_handover_reminder_is_private_and_preserves_report_item_claim_and_storage_state(): void
+    {
+        $before = [];
+        foreach (['finder_report', 'found_item', 'claim', 'storage_assignment'] as $table) $before[$table] = DB::table($table)->get()->toJson();
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk()->assertJsonPath('data.deduplicated', false);
+        foreach ($before as $table => $rows) $this->assertSame($rows, DB::table($table)->get()->toJson(), $table);
+        $this->getJson('/api/staff/finder-reports/'.$this->finder)->assertJsonPath('data.last_handover_reminder_at', '2026-10-24 11:00:00.000000');
+        $this->own();
+        $response = $this->getJson('/api/my/notifications')->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.kind', 'finder_handover_requested')->assertJsonPath('data.0.target_type', 'finder_report')
+            ->assertJsonPath('data.0.target_id', $this->finder)->assertJsonPath('data.0.possible_item_id', null);
+        $this->assertStringContainsString('have not received', $response->json('data.0.message'));
+        $this->assertStringContainsString('bring it to the office for physical handover', $response->json('data.0.message'));
+        foreach (['PRIVATE-', 'user_id', 'event_key', 'contact_details', 'storage_location', 'evidence_text'] as $secret) $response->assertDontSee($secret);
+        $id = $response->json('data.0.notification_id');
+        Sanctum::actingAs($this->other, ['user']);
+        $this->getJson('/api/my/notifications')->assertJsonCount(0, 'data');
+        $this->patchJson('/api/my/notifications/'.$id.'/read')->assertNotFound();
+    }
+
+    public function test_handover_retry_preserves_read_state_and_later_intentional_reminder_is_allowed_at_one_hour(): void
+    {
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk();
+        $this->own(); $this->patchJson('/api/my/notifications/read-all')->assertOk();
+        $before = DB::table('in_app_notification')->get()->toJson();
+        Sanctum::actingAs($this->staff, ['staff']);
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk()->assertJsonPath('data.deduplicated', true);
+        $this->postJson($this->reminderUrl(), $this->reminderBody('2'))->assertConflict();
+        CarbonImmutable::setTestNow(CarbonImmutable::now()->addHour()->subMicrosecond());
+        $this->postJson($this->reminderUrl(), $this->reminderBody('2'))->assertConflict();
+        $this->assertSame($before, DB::table('in_app_notification')->get()->toJson());
+        CarbonImmutable::setTestNow(CarbonImmutable::now()->addMicrosecond());
+        $this->postJson($this->reminderUrl(), $this->reminderBody('2'))->assertOk()->assertJsonPath('data.deduplicated', false);
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk()->assertJsonPath('data.deduplicated', true);
+        $this->assertDatabaseCount('in_app_notification', 2);
+        $this->own(); $this->getJson('/api/my/notifications/unread-count')->assertJsonPath('unread_count', 1);
+    }
+
+    public function test_handover_requires_staff_and_valid_request_key_and_never_accepts_recipient_or_message(): void
+    {
+        $this->own(); $this->postJson($this->reminderUrl(), $this->reminderBody())->assertForbidden();
+        Sanctum::actingAs($this->staff, ['user']); $this->postJson($this->reminderUrl(), $this->reminderBody())->assertForbidden();
+        auth()->forgetGuards(); auth()->shouldUse('web'); $this->postJson($this->reminderUrl(), $this->reminderBody())->assertUnauthorized();
+        Sanctum::actingAs($this->staff, ['staff']);
+        $this->postJson($this->reminderUrl())->assertUnprocessable()->assertJsonValidationErrors('request_id');
+        $this->postJson($this->reminderUrl(), ['request_id' => 'invalid'])->assertUnprocessable();
+        $fields = ['user_id', 'recipient_id', 'recipient_user_id', 'person_id', 'staff_id', 'message', 'status', 'item_id'];
+        $this->postJson($this->reminderUrl(), $this->reminderBody() + array_fill_keys($fields, '1'))->assertUnprocessable()->assertJsonValidationErrors($fields);
+        $this->assertDatabaseCount('in_app_notification', 0);
+    }
+
+    public function test_handover_reminders_and_retries_reject_every_nonpending_state_and_missing_report(): void
+    {
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk();
+        foreach (['CLOSED', 'WITHDRAWN', 'RECEIVED'] as $status) {
+            $reviewed = $status !== 'WITHDRAWN';
+            DB::table('finder_report')->where('report_id', $this->finder)->update([
+                'status' => $status, 'reviewed_by' => $reviewed ? $this->staff->staff_id : null,
+                'reviewed_at' => $reviewed ? '2026-10-24 11:00:00' : null,
+                'received_item_id' => $status === 'RECEIVED' ? $this->item : null,
+            ]);
+            $this->postJson($this->reminderUrl(), $this->reminderBody())->assertConflict();
+        }
+        $this->postJson('/api/staff/finder-reports/99999999/request-handover', $this->reminderBody())->assertNotFound();
+        $this->assertDatabaseCount('in_app_notification', 1);
+    }
+
+    public function test_handover_reminder_rolls_back_with_outer_transaction_or_persistence_failure(): void
+    {
+        DB::beginTransaction();
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk();
+        DB::rollBack(); $this->assertDatabaseCount('in_app_notification', 0);
+        DB::listen(function ($query): void { if (str_contains($query->sql, 'insert into `in_app_notification`')) throw new \RuntimeException('Simulated persistence failure'); });
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertStatus(500);
+        $this->assertDatabaseCount('in_app_notification', 0);
+        $this->assertDatabaseHas('finder_report', ['report_id' => $this->finder, 'status' => 'PENDING', 'received_item_id' => null]);
+    }
+
+    public function test_handover_route_throttles_repeated_requests_without_duplicate_notifications(): void
+    {
+        for ($request = 0; $request < 10; $request++) $this->postJson($this->reminderUrl(), $this->reminderBody())->assertOk();
+        $this->postJson($this->reminderUrl(), $this->reminderBody())->assertStatus(429);
+        $this->assertDatabaseCount('in_app_notification', 1);
+    }
+
     public function test_possible_match_derives_owner_is_private_and_never_creates_a_claim_or_resolves_the_report(): void
     {
         $this->sendMatch(); $this->own();

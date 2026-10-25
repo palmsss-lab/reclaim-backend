@@ -10,7 +10,17 @@ Notification list/count/read endpoints require an active authenticated **user ac
 
 Messages are fixed server text. Neither requests nor responses include another person's claims, evidence, contact details, storage, recipient identity, reviewer identity, or internal event keys. React renders message text normally, never as HTML. Routes are built from allowlisted target types and numeric identifiers, never API-supplied URLs.
 
-## User endpoints
+## Staff finder handover reminders
+
+`POST /api/staff/finder-reports/{report}/request-handover` requires the existing active staff authorization/ability and `manageItems` permission. The route uses the existing `throttle:10,1` limit. Send `{ "request_id": "00000000-0000-4000-8000-000000000001" }`: a new UUID for an intentional reminder, the **same UUID** for retries of an uncertain request. Recipient IDs, message, status, item, and actor fields are prohibited. React retains the UUID in memory across uncertain failures; it does not automatically retry writes or store credentials.
+
+Only a PENDING report with no received item is eligible. The transaction locks the finder report before checking status, recipient, previous request, and last reminder. The owner comes solely from that locked report. Existing account-owned notification storage, read/count APIs and safe own-report links are reused; no email or push is sent. No report, claim, inventory, or storage state is modified.
+
+Success: `{ "message": "Handover reminder recorded.", "data": { "sent_at": "2026-10-25T11:00:00+08:00", "next_reminder_at": "2026-10-25T12:00:00+08:00", "deduplicated": false } }`. Dates are Asia/Manila with an offset. Retrying a recorded UUID returns success with `deduplicated: true` and preserves its original creation/read state, even after a later reminder. Eligibility is rechecked before replay, so closed, withdrawn or received reports return 409. A different UUID within one hour of the latest reminder returns 409 (`A handover reminder was already sent within the last hour.`); at exactly one hour a new reminder is allowed. A missing report returns 404; missing/invalid UUID or prohibited fields return 422; the route throttle returns 429. Staff should refresh after 409, never automatically resubmit.
+
+Staff finder-report list/detail responses include nullable `last_handover_reminder_at`, a database-local Philippine timestamp without an offset. The frontend's existing formatter treats it as Asia/Manila. This field is derived from notification history, not a report status. Older once-only handover notices, if present, also count toward this time. Private message: “Staff have not received the item from your found-item report yet. Please bring it to the office for physical handover. Contact the office to arrange handover.” No address is invented. Staff must still use the separate physical-receipt/initial-storage workflow after actual handover.
+
+## User endpoint contract
 
 | Method | Path (under `/api`) | Contract |
 | --- | --- | --- |

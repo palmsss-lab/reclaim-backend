@@ -98,6 +98,7 @@ Route::middleware(['auth:sanctum', EnsureAccountIsActive::class, AuthenticateSes
         Route::delete('/staff/items/{item}/public-listing', [PublicItemsController::class, 'unpublish'])->whereNumber('item');
         Route::get('/staff/finder-reports', [FinderReportsController::class, 'staffIndex']);
         Route::get('/staff/finder-reports/{report}', [FinderReportsController::class, 'staffShow'])->whereNumber('report');
+        Route::post('/staff/finder-reports/{report}/request-handover', [NotificationsController::class, 'requestHandover'])->whereNumber('report')->middleware('throttle:10,1');
         Route::post('/staff/finder-reports/{report}/receive', [FinderReportsController::class, 'receive'])->whereNumber('report')->middleware('throttle:10,1');
         Route::post('/staff/finder-reports/{report}/close', [FinderReportsController::class, 'close'])->whereNumber('report');
         Route::get('/staff/missing-reports', [MissingItemReportsController::class, 'staffIndex']);

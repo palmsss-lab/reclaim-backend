@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\MyReportIndexRequest;
 use App\Http\Requests\User\NotifyPossibleMatchRequest;
+use App\Http\Requests\User\RequestHandoverReminderRequest;
 use App\Services\InAppNotifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -49,6 +50,12 @@ class NotificationsController extends Controller
     {
         $notifications->possibleMatch($report, (int) $request->validated('item_id'));
         return response()->json(['message' => 'Possible-match notification recorded.']);
+    }
+
+    public function requestHandover(RequestHandoverReminderRequest $request, int $report, InAppNotifications $notifications): JsonResponse
+    {
+        $result = $notifications->requestHandover($report, $request->validated('request_id'));
+        return response()->json(['message' => 'Handover reminder recorded.', 'data' => $result]);
     }
 
     private function own(Request $request)
