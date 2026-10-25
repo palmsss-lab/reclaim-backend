@@ -185,6 +185,24 @@ class UserFacingFeaturesTest extends TestCase
         $this->getJson('/api/my/finder-reports/'.$report2)->assertOk()->assertJsonPath('data.received_item_id', $receivedItemId);
     }
 
+    public function test_user_report_event_times_store_and_return_as_manila_local_values(): void
+    {
+        $this->user();
+        $foundAt = '2026-10-01 09:30:00.000000';
+        $finder = $this->postJson('/api/my/finder-reports', [
+            'item_description' => 'Timezone fixture found item', 'found_place' => 'Test lobby',
+            'found_at' => '2026-10-01T09:30:00+08:00',
+        ])->assertCreated()->assertJsonPath('data.found_at', $foundAt);
+        $this->assertDatabaseHas('finder_report', ['report_id' => $finder->json('data.report_id'), 'found_at' => $foundAt]);
+
+        $lostAt = '2026-09-30 18:15:00.000000';
+        $missing = $this->postJson('/api/my/missing-reports', [
+            'item_description' => 'Timezone fixture missing item', 'last_known_location' => 'Test hallway',
+            'lost_at' => '2026-09-30T18:15:00+08:00',
+        ])->assertCreated()->assertJsonPath('data.lost_at', $lostAt);
+        $this->assertDatabaseHas('missing_item_report', ['report_id' => $missing->json('data.report_id'), 'lost_at' => $lostAt]);
+    }
+
     public function test_missing_reports_are_private_editable_until_resolved_and_staff_review_does_not_return_items(): void
     {
         $this->user();
