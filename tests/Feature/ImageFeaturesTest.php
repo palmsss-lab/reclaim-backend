@@ -10,6 +10,7 @@ use App\Models\StorageLocation;
 use App\Models\User;
 use App\Services\ImageFiles;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Filesystem\AwsS3V3Adapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -102,6 +103,37 @@ class ImageFeaturesTest extends TestCase
     private function upload(string $path, ?UploadedFile $file = null)
     {
         return $this->postJson($path, ['image' => $file ?? UploadedFile::fake()->image('photo.png', 64, 48)]);
+    }
+
+    public function test_image_disk_defaults_local_and_can_build_private_r2_adapter_without_public_url(): void
+    {
+        $original = config('filesystems.disks.reclaim_images');
+        $this->assertSame('local', $original['driver']);
+        $this->assertSame('private', $original['visibility']);
+        $this->assertFalse($original['serve']);
+        $this->assertArrayNotHasKey('url', $original);
+
+        config(['filesystems.disks.reclaim_images' => array_replace($original, [
+            'driver' => 's3',
+            'root' => '',
+            'key' => 'test-access-key',
+            'secret' => 'test-secret-key',
+            'region' => 'auto',
+            'bucket' => 'private-test-bucket',
+            'endpoint' => 'https://test-account.r2.cloudflarestorage.com',
+        ])]);
+        Storage::forgetDisk('reclaim_images');
+
+        try {
+            $disk = Storage::disk('reclaim_images');
+            $this->assertInstanceOf(AwsS3V3Adapter::class, $disk);
+            $this->assertSame('private', $disk->getConfig()['visibility']);
+            $this->assertSame('', $disk->getConfig()['root']);
+            $this->assertArrayNotHasKey('url', $disk->getConfig());
+        } finally {
+            Storage::forgetDisk('reclaim_images');
+            config(['filesystems.disks.reclaim_images' => $original]);
+        }
     }
 
     public function test_categories_expose_only_identifiers_and_names_without_authorizing_management(): void

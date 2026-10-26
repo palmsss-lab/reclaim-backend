@@ -8,7 +8,7 @@ This backend is Laravel 12 and requires PHP 8.2 or newer. The Docker image uses 
 2. This backend-only repository has Laravel at its root: leave Root Directory blank and use Dockerfile as the Dockerfile path. For the local monorepo layout, set Root Directory to reclaim-backend instead. The image starts Apache itself; no separate start command is needed.
 3. Add the environment values below in the service's Environment settings. Do not add credentials as Docker build arguments or commit a populated .env.
 4. Attach the MySQL database and supply its connection details. Use the provider's TLS CA instructions. The image includes the operating system CA bundle at /etc/ssl/certs/ca-certificates.crt; set MYSQL_ATTR_SSL_CA to that path when the database certificate chains to public roots. If the database provider gives you a private CA, add it as a Render Secret File and point MYSQL_ATTR_SSL_CA to that mounted file instead.
-5. For private image uploads, attach durable storage mounted at /var/data and set RECLAIM_IMAGE_ROOT=/var/data/reclaim-images. Do not put this directory under public/, symlink it, or serve it as static files. Without a persistent disk/object-storage service, local uploads can be lost on container replacement. The mounted disk is not automatically included in database backups.
+5. For private image uploads, either attach durable storage mounted at /var/data and set RECLAIM_IMAGE_ROOT=/var/data/reclaim-images, or configure the private Cloudflare R2 bucket using the variables below. Do not put local image directories under public/, symlink them, serve them as static files, or make the R2 bucket public. Without a persistent disk or object storage, local uploads can be lost on container replacement. Image files must be backed up separately from database records.
 6. Deploy, then check the Render health path /up. Configure HTTPS and verify proxy, cookie, CORS, mail, Google sign-in and private-image behavior against the actual service before accepting users.
 
 The Docker image does not migrate, seed, or bootstrap accounts. Back up and verify the target database, then apply the reviewed pending migrations explicitly with php artisan migrate --force from a controlled release/deploy step. Never use migrate:fresh or destructive seeders against production. Create the first administrator separately with php artisan accounts:bootstrap-admin; it prompts for a password and is not run automatically.
@@ -40,7 +40,17 @@ Set these as service environment variables. Use Render's secret field for values
 | SANCTUM_STATEFUL_DOMAINS | Exact frontend hostname, optionally with port; no scheme, e.g. app.example.com. |
 | SESSION_SECURE_COOKIE | true for HTTPS. |
 | SESSION_DOMAIN | Usually .example.com when the frontend and API use sibling subdomains; leave unset for same-host proxying. |
-| RECLAIM_IMAGE_ROOT | /var/data/reclaim-images when using the persistent disk described above. |
+| RECLAIM_IMAGE_DRIVER | `local` by default; set to `s3` to select Cloudflare R2. |
+| RECLAIM_IMAGE_ROOT | `/var/data/reclaim-images` when using a Render persistent disk. Not needed for R2. |
+| RECLAIM_IMAGE_ENDPOINT | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` from your Cloudflare account. |
+| RECLAIM_IMAGE_REGION | `auto` for Cloudflare R2. |
+| RECLAIM_IMAGE_BUCKET | Exact existing R2 bucket name. |
+| RECLAIM_IMAGE_ACCESS_KEY_ID | R2 S3 API Access Key ID; secret environment value. |
+| RECLAIM_IMAGE_SECRET_ACCESS_KEY | R2 S3 API Secret Access Key; secret environment value. |
+
+### Private image storage with Cloudflare R2
+
+Create an R2 API token with Object Read & Write access restricted to this bucket, then enter its Access Key ID and Secret Access Key directly as Render backend environment variables. Keep the bucket private and do not configure an `AWS_URL`, public bucket domain, R2.dev URL, or public CDN for it. The application uses the configured endpoint and Laravel's private `reclaim_images` disk; it does not issue object URLs. User and staff image requests continue through the existing authorized Laravel endpoints. Cloudflare R2 does not implement S3 ACL operations; Laravel 12.69 automatically disables visibility retention for R2 endpoints, and the private bucket policy is the access boundary. Confirm upload, authorized reads, replacement, deletion, and restoration against your actual bucket before accepting production uploads. Switching disks does not copy existing local files: copy each stored image to the same object key in R2 before cutover or its existing attachment record will point to a missing file. Keep a separate coordinated backup of R2 objects and the database attachment records; bucket durability is not a backup.
 
 The current browser login uses Sanctum cookies. Put the frontend and API on the same site (for example, sibling subdomains under one registrable domain) or proxy /api and /sanctum through the frontend origin. Unrelated cross-site origins are not supported by the current SameSite=Lax session setup. Keep CORS and stateful-domain values exact; do not use wildcards.
 

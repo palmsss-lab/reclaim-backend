@@ -30,8 +30,15 @@ return [
 
     'disks' => [
         'reclaim_images' => [
-            'driver' => 'local',
-            'root' => env('RECLAIM_IMAGE_ROOT', storage_path('app/reclaim-images')),
+            'driver' => env('RECLAIM_IMAGE_DRIVER', 'local'),
+            'root' => env('RECLAIM_IMAGE_DRIVER', 'local') === 'local'
+                ? env('RECLAIM_IMAGE_ROOT', storage_path('app/reclaim-images'))
+                : '',
+            'key' => env('RECLAIM_IMAGE_ACCESS_KEY_ID'),
+            'secret' => env('RECLAIM_IMAGE_SECRET_ACCESS_KEY'),
+            'region' => env('RECLAIM_IMAGE_REGION', 'auto'),
+            'bucket' => env('RECLAIM_IMAGE_BUCKET'),
+            'endpoint' => env('RECLAIM_IMAGE_ENDPOINT'),
             'visibility' => 'private',
             'serve' => false,
             'throw' => true,
